@@ -21,6 +21,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="gaya.css">
+<!-- PWA Manifest & Logo -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1a45">
+<link rel="apple-touch-icon" href="icon-192.png">
     <!-- Library: login Google (Firebase), baca & buat QR -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -33,7 +37,6 @@
     <div id="auth-screen" class="fixed inset-0 z-[100] bg-white overflow-y-auto">
         <div class="auth-top"></div>
         <div class="relative z-10 min-h-full flex flex-col items-center justify-center p-4 gap-5">
-            <img src="banner.png" alt="PRINT INSYA" class="w-full max-w-4xl rounded-2xl shadow-xl border border-slate-200" onerror="this.remove()">
             <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border-2 border-gold-500 p-7 text-center space-y-4">
                 <h1 class="wordmark text-6xl text-navy-900">PRINT <span class="text-gold-500">INSYA</span></h1>
                 <p class="text-[11px] font-extrabold tracking-[.18em] text-navy-900 uppercase">Sistem Kasir · Khusus Pengguna Terdaftar</p>
@@ -235,18 +238,22 @@
                     <div class="card-head">
                         <div>
                             <h3 class="wordmark text-3xl text-navy-900">Laporan Penjualan Hari Ini</h3>
-                            <p class="text-xs text-slate-500">Ringkasan transaksi dan pendapatan harian toko</p>
+                            <p class="text-xs text-slate-500">Ringkasan transaksi, pendapatan, dan laba kotor harian</p>
                         </div>
-                        <button onclick="sendDailyReportToWA()" class="btn-wa"><i class="fa-brands fa-whatsapp text-base"></i> Kirim Laporan Harian ke WA</button>
+                        <div class="flex items-center gap-2">
+                            <select id="wa-select-harian" onchange="onWaSelectChange(this)" title="Kirim ke nomor" class="wa-select"></select>
+                            <button onclick="sendDailyReportToWA()" class="btn-wa"><i class="fa-brands fa-whatsapp text-base"></i> Kirim ke WA</button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div class="stat-card"><p class="stat-label">Total Omset Hari Ini</p><h4 class="text-3xl font-extrabold text-navy-900 mt-1" id="daily-omset">Rp 0</h4></div>
                         <div class="stat-card"><p class="stat-label">Jumlah Transaksi</p><h4 class="text-3xl font-extrabold text-slate-800 mt-1" id="daily-count">0 Nota</h4></div>
                         <div class="stat-card"><p class="stat-label">Item Terjual</p><h4 class="text-3xl font-extrabold text-gold-600 mt-1" id="daily-items">0 pcs</h4></div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div class="stat-card"><p class="stat-label"><i class="fa-solid fa-money-bill-wave"></i> Pemasukan Tunai</p><h4 class="text-2xl font-extrabold text-slate-800 mt-1" id="daily-cash">Rp 0</h4></div>
                         <div class="stat-card"><p class="stat-label"><i class="fa-solid fa-qrcode"></i> Pemasukan QRIS</p><h4 class="text-2xl font-extrabold text-slate-800 mt-1" id="daily-qris">Rp 0</h4></div>
+                        <div class="stat-card" style="border-top-color:#10b981"><p class="stat-label"><i class="fa-solid fa-chart-line"></i> Laba Kotor Hari Ini</p><h4 class="text-2xl font-extrabold text-emerald-600 mt-1" id="daily-profit">Rp 0</h4></div>
                     </div>
                 </div>
             </div>
@@ -256,18 +263,21 @@
                 <div class="max-w-6xl mx-auto space-y-5">
                     <div class="card-head">
                         <div>
-                            <h3 class="wordmark text-3xl text-navy-900">Laporan Audit</h3>
-                            <p class="text-xs text-slate-500">Cari transaksi, saring tanggal, dan lihat rincian per kategori</p>
+                            <h3 class="wordmark text-3xl text-navy-900">Laporan Audit &amp; Laba Rugi</h3>
+                            <p class="text-xs text-slate-500">Lihat untung atau rugi, cari transaksi, dan saring berdasarkan tanggal</p>
                         </div>
-                        <button onclick="sendAuditReportToWA()" class="btn-wa"><i class="fa-brands fa-whatsapp text-base"></i> Kirim Laporan Audit ke WA</button>
+                        <div class="flex items-center gap-2">
+                            <select id="wa-select-audit" onchange="onWaSelectChange(this)" title="Kirim ke nomor" class="wa-select"></select>
+                            <button onclick="sendAuditReportToWA()" class="btn-wa"><i class="fa-brands fa-whatsapp text-base"></i> Kirim ke WA</button>
+                        </div>
                     </div>
 
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                         <div class="md:col-span-5">
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">Pencarian</label>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Pencarian (tabel di bawah)</label>
                             <div class="relative">
                                 <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                                <input type="text" id="audit-search" oninput="renderAuditReport()" placeholder="Nama barang, kategori, pelanggan, ID nota..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm">
+                                <input type="text" id="audit-search" oninput="auditLimit=200;renderAuditReport()" placeholder="Nama barang, kategori, pelanggan, ID nota..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm">
                             </div>
                         </div>
                         <div class="md:col-span-3"><label class="block text-xs font-semibold text-slate-600 mb-1">Dari Tanggal</label><input type="date" id="audit-from" onchange="renderAuditReport()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm"></div>
@@ -275,10 +285,25 @@
                         <div class="md:col-span-1"><button onclick="resetAuditFilter()" title="Reset filter" class="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-bold"><i class="fa-solid fa-rotate-left"></i></button></div>
                     </div>
 
-                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                        <h4 class="font-extrabold text-navy-900 mb-3">Ringkasan Per Kategori <span id="audit-info" class="ml-2 text-xs font-medium text-slate-400"></span></h4>
-                        <table class="w-full text-left text-sm">
-                            <thead><tr class="text-xs text-slate-400 border-b border-slate-100 uppercase"><th class="pb-3">Kategori</th><th class="pb-3 text-center">Volume Terjual</th><th class="pb-3 text-right">Total Pendapatan</th></tr></thead>
+                    <!-- LAPORAN LABA RUGI -->
+                    <div class="bg-white rounded-2xl border-2 border-gold-500 shadow-md overflow-hidden">
+                        <div class="px-5 py-4 flex flex-wrap items-center justify-between gap-3 bg-navy-900 text-white">
+                            <div>
+                                <h4 class="wordmark text-3xl">Laporan Laba Rugi</h4>
+                                <p class="text-xs text-slate-300">Periode: <b id="pl-periode">Semua waktu</b> · mengikuti filter tanggal</p>
+                            </div>
+                            <div class="text-right">
+                                <span id="pl-status" class="inline-block px-3 py-1 rounded-lg text-xs font-extrabold bg-slate-500 text-white">BELUM ADA DATA</span>
+                                <p id="pl-net" class="wordmark normal-case text-5xl mt-1">Rp 0</p>
+                            </div>
+                        </div>
+                        <div id="pl-body" class="p-5 text-sm text-slate-700"></div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                        <h4 class="font-extrabold text-navy-900 mb-3">Laba Per Kategori <span id="audit-info" class="ml-2 text-xs font-medium text-slate-400"></span></h4>
+                        <table class="w-full text-left text-sm min-w-[640px]">
+                            <thead><tr class="text-xs text-slate-400 border-b border-slate-100 uppercase"><th class="pb-3">Kategori</th><th class="pb-3 text-center">Volume</th><th class="pb-3 text-right">Pendapatan</th><th class="pb-3 text-right">HPP</th><th class="pb-3 text-right">Laba</th><th class="pb-3 text-right">Margin</th></tr></thead>
                             <tbody id="audit-category-table" class="divide-y divide-slate-100 text-slate-700"></tbody>
                         </table>
                     </div>
@@ -286,9 +311,9 @@
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                         <div class="px-5 py-3 border-b border-slate-100"><h4 class="font-extrabold text-navy-900">Rincian Transaksi</h4></div>
                         <div class="overflow-auto max-h-[420px]">
-                            <table class="w-full text-left text-sm min-w-[820px]">
+                            <table class="w-full text-left text-sm min-w-[980px]">
                                 <thead class="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0"><tr>
-                                    <th class="py-3 px-4">Waktu</th><th class="py-3 px-4">ID Nota</th><th class="py-3 px-4">Pelanggan</th><th class="py-3 px-4">Item</th><th class="py-3 px-4">Kategori</th><th class="py-3 px-4 text-center">Qty</th><th class="py-3 px-4 text-right">Harga</th><th class="py-3 px-4 text-right">Subtotal</th>
+                                    <th class="py-3 px-4">Waktu</th><th class="py-3 px-4">ID Nota</th><th class="py-3 px-4">Pelanggan</th><th class="py-3 px-4">Item</th><th class="py-3 px-4">Kategori</th><th class="py-3 px-4 text-center">Qty</th><th class="py-3 px-4 text-right">Pendapatan</th><th class="py-3 px-4 text-right">HPP</th><th class="py-3 px-4 text-right">Laba</th>
                                 </tr></thead>
                                 <tbody id="audit-detail-table" class="divide-y divide-slate-100 text-slate-700"></tbody>
                             </table>
@@ -314,13 +339,18 @@
             <div id="tab-produk" class="tab-content hidden h-full p-6 overflow-y-auto">
                 <div class="max-w-6xl mx-auto space-y-5">
                     <div class="card-head">
-                        <div><h3 class="wordmark text-3xl text-navy-900">Katalog Barang, Jasa &amp; Stok</h3><p class="text-xs text-slate-500">Stok berkurang otomatis saat transaksi kasir. Baris kuning = stok menipis.</p></div>
+                        <div><h3 class="wordmark text-3xl text-navy-900">Katalog Barang, Jasa &amp; Stok</h3><p class="text-xs text-slate-500">Isi harga beli agar modal (HPP) dan laba per satuan terhitung otomatis. Tombol <i class="fa-solid fa-cart-plus text-emerald-700"></i> = beli / tambah stok.</p></div>
                         <button onclick="openProductModal()" class="px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-navy-900 rounded-xl text-xs font-extrabold shadow">+ Tambah Item</button>
                     </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="stat-card"><p class="stat-label">Nilai Persediaan (modal)</p><h4 class="text-2xl font-extrabold text-navy-900 mt-1" id="prod-inv-value">Rp 0</h4></div>
+                        <div class="stat-card"><p class="stat-label">Perkiraan Nilai Jual Stok Barang</p><h4 class="text-2xl font-extrabold text-emerald-600 mt-1" id="prod-sale-value">Rp 0</h4></div>
+                        <div class="stat-card" style="border-top-color:#f59e0b"><p class="stat-label">Barang Belum Ada Harga Beli</p><h4 class="text-2xl font-extrabold text-amber-600 mt-1" id="prod-nocost">0 item</h4></div>
+                    </div>
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-                        <table class="w-full text-left text-sm min-w-[760px]">
+                        <table class="w-full text-left text-sm min-w-[980px]">
                             <thead class="bg-slate-50 text-xs text-slate-500 border-b border-slate-100"><tr>
-                                <th class="py-3 px-4">Nama Item</th><th class="py-3 px-4">Kategori</th><th class="py-3 px-4">Harga</th><th class="py-3 px-4 text-center">Stok Tersedia</th><th class="py-3 px-4 text-center">Batas Peringatan</th><th class="py-3 px-4 text-center">Aksi</th>
+                                <th class="py-3 px-4">Nama Item</th><th class="py-3 px-4">Kategori</th><th class="py-3 px-4">Harga Jual</th><th class="py-3 px-4">Modal (HPP)</th><th class="py-3 px-4">Laba / Satuan</th><th class="py-3 px-4 text-center">Stok</th><th class="py-3 px-4 text-center">Batas Peringatan</th><th class="py-3 px-4 text-center">Aksi</th>
                             </tr></thead>
                             <tbody id="products-table-body" class="divide-y divide-slate-100"></tbody>
                         </table>
@@ -332,22 +362,37 @@
             <div id="tab-modal" class="tab-content hidden h-full p-6 overflow-y-auto">
                 <div class="max-w-6xl mx-auto space-y-5">
                     <div class="card-head">
-                        <div><h3 class="wordmark text-3xl text-navy-900">Modal Usaha</h3><p class="text-xs text-slate-500">Catat dari mana modal berasal dan untuk apa modal dipakai</p></div>
+                        <div><h3 class="wordmark text-3xl text-navy-900">Modal &amp; Arus Uang</h3><p class="text-xs text-slate-500">Dari mana uang masuk, ke mana uang keluar, dan berapa posisi kas toko</p></div>
                         <button onclick="openCapitalModal()" class="px-4 py-2.5 bg-gold-500 hover:bg-gold-600 text-navy-900 rounded-xl text-xs font-extrabold shadow">+ Catat Modal</button>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                        <div class="stat-card"><p class="stat-label">Total Modal Masuk</p><h4 class="text-2xl font-extrabold text-emerald-600 mt-1" id="cap-in">Rp 0</h4></div>
-                        <div class="stat-card"><p class="stat-label">Modal Terpakai</p><h4 class="text-2xl font-extrabold text-rose-600 mt-1" id="cap-out">Rp 0</h4></div>
-                        <div class="stat-card"><p class="stat-label">Sisa Modal</p><h4 class="text-2xl font-extrabold text-navy-900 mt-1" id="cap-left">Rp 0</h4></div>
-                        <div class="stat-card"><p class="stat-label">Omset Penjualan (Kasir)</p><h4 class="text-2xl font-extrabold text-gold-600 mt-1" id="cap-omset">Rp 0</h4></div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="stat-card" style="border-top-color:#10b981"><p class="stat-label">(+) Total Modal Masuk</p><h4 class="text-2xl font-extrabold text-emerald-600 mt-1" id="cap-in">Rp 0</h4></div>
+                        <div class="stat-card" style="border-top-color:#10b981"><p class="stat-label">(+) Penjualan Kasir</p><h4 class="text-2xl font-extrabold text-emerald-600 mt-1" id="cap-sales">Rp 0</h4></div>
+                        <div class="stat-card" style="border-top-color:#e11d48"><p class="stat-label">(−) Total Pengeluaran</p><h4 class="text-2xl font-extrabold text-rose-600 mt-1" id="cap-out">Rp 0</h4></div>
                     </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="stat-card lg:col-span-1 border-2 border-gold-500" style="border-top-width:4px"><p class="stat-label">= Saldo Kas Toko (perkiraan)</p><h4 class="text-3xl font-extrabold text-navy-900 mt-1" id="cap-cash">Rp 0</h4></div>
+                        <div class="stat-card"><p class="stat-label">Nilai Persediaan Barang</p><h4 class="text-2xl font-extrabold text-navy-900 mt-1" id="cap-inv">Rp 0</h4></div>
+                        <div class="stat-card"><p class="stat-label">Laba Bersih (seluruh waktu)</p><h4 class="text-2xl font-extrabold text-emerald-600 mt-1" id="cap-net">Rp 0</h4>
+                            <div class="h-2 bg-slate-100 rounded-full mt-2 overflow-hidden"><div id="cap-payback-bar" class="h-full bg-gold-500 rounded-full" style="width:0%"></div></div>
+                            <p id="cap-payback-text" class="text-[11px] text-slate-500 mt-1"></p></div>
+                    </div>
+
+                    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-slate-700 space-y-1">
+                        <p class="font-extrabold text-amber-800"><i class="fa-solid fa-circle-info"></i> Cara membaca angka</p>
+                        <p><b>Saldo Kas</b> = Modal masuk + Penjualan − Semua pengeluaran (beli stok, peralatan, operasional, prive).</p>
+                        <p><b>Laba Bersih</b> = Penjualan − HPP (modal barang yang terjual) − Biaya operasional. Beli stok <i>bukan</i> biaya: uangnya berubah jadi persediaan dan baru menjadi biaya (HPP) saat barang terjual.</p>
+                        <p>Setiap pembelian lewat tombol <i class="fa-solid fa-cart-plus"></i> di Barang &amp; Jasa otomatis tercatat di sini sebagai pengeluaran "Beli Stok Barang".</p>
+                    </div>
+
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                         <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                             <h4 class="font-extrabold text-navy-900 mb-3">Asal Modal (Sumber Dana)</h4>
                             <div id="cap-sources" class="space-y-2.5 text-sm"></div>
                         </div>
                         <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                            <h4 class="font-extrabold text-navy-900 mb-3">Pemakaian Modal</h4>
+                            <h4 class="font-extrabold text-navy-900 mb-3">Pemakaian Uang</h4>
                             <div id="cap-uses" class="space-y-2.5 text-sm"></div>
                         </div>
                     </div>
@@ -376,15 +421,17 @@
                         <div id="qris-files-list" class="space-y-3"></div>
                     </div>
 
+                    
                     <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                        <h3 class="font-extrabold text-navy-900 text-base flex items-center gap-2"><i class="fa-brands fa-whatsapp text-emerald-600"></i> Nomor WhatsApp Laporan</h3>
-                        <div id="wa-saved" class="hidden flex items-center justify-between gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                            <div class="text-sm"><p class="text-[11px] font-semibold text-emerald-700 uppercase">Nomor tersimpan</p><p class="font-extrabold text-slate-800" id="wa-saved-number"></p></div>
-                            <button onclick="deleteWaNumber()" class="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200"><i class="fa-solid fa-trash-can"></i> Hapus</button>
+                        <div>
+                            <h3 class="font-extrabold text-navy-900 text-base flex items-center gap-2"><i class="fa-brands fa-whatsapp text-emerald-600"></i> Nomor WhatsApp Laporan</h3>
+                            <p class="text-xs text-slate-500 mt-1">Simpan satu atau beberapa nomor. Saat mengirim laporan, Anda tinggal memilih nomor tujuan dari daftar.</p>
                         </div>
-                        <div class="flex gap-2">
-                            <input type="text" id="setting-wa-no" placeholder="Contoh: 08123456789 atau 628123456789" class="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm">
-                            <button onclick="saveWaNumber()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">Simpan / Ganti</button>
+                        <div id="wa-list" class="space-y-2"></div>
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                            <input type="text" id="setting-wa-name" placeholder="Nama (mis. Pemilik)" class="sm:col-span-4 px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                            <input type="text" id="setting-wa-no" placeholder="08123456789 atau 628123456789" class="sm:col-span-5 px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                            <button onclick="saveWaNumber()" class="sm:col-span-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"><i class="fa-solid fa-floppy-disk"></i> Simpan</button>
                         </div>
                     </div>
 
@@ -395,6 +442,19 @@
                             <button onclick="requestNotifPermission()" class="px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold">Aktifkan Notifikasi Browser</button>
                             <span id="notif-perm-status" class="text-xs font-semibold text-slate-500"></span>
                         </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-extrabold text-navy-900 text-base flex items-center gap-2"><i class="fa-solid fa-database text-navy-800"></i> Penyimpanan &amp; Cadangan Data</h3>
+                        <div id="storage-info" class="text-xs space-y-1.5 text-slate-600"></div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="exportBackup()" class="px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold"><i class="fa-solid fa-download"></i> Unduh Cadangan (JSON)</button>
+                            <label class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"><i class="fa-solid fa-upload"></i> Pulihkan dari File
+                                <input type="file" accept=".json,application/json" onchange="importBackup(event)" class="hidden">
+                            </label>
+                            <button onclick="requestPersist()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold"><i class="fa-solid fa-lock"></i> Jadikan Penyimpanan Permanen</button>
+                        </div>
+                        <p class="text-[11px] text-slate-500">Data tersimpan di browser perangkat ini. Unduh cadangan secara rutin (mis. tiap minggu) dan simpan di Google Drive/flashdisk, agar aman bila browser dibersihkan atau perangkat rusak.</p>
                     </div>
                 </div>
             </div>
@@ -438,7 +498,7 @@
 
     <!-- MODAL TAMBAH / EDIT ITEM -->
     <div id="product-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
             <h3 class="font-bold text-slate-800 text-base" id="modal-product-title">Tambah Item Baru</h3>
             <form id="product-form" onsubmit="handleProductSubmit(event)" class="space-y-3">
                 <input type="hidden" id="prod-id">
@@ -453,16 +513,58 @@
                     </select>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Harga (Rp)</label><input type="number" id="prod-price" required min="0" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"></div>
-                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Satuan</label><input type="text" id="prod-unit" required placeholder="pcs/lembar" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Harga Jual per Satuan (Rp)</label><input type="number" id="prod-price" required min="0" step="any" oninput="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Satuan Jual</label><input type="text" id="prod-unit" required placeholder="lembar / pcs" oninput="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Stok</label><input type="number" id="prod-stock" value="50" min="0" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Stok</label><input type="number" id="prod-stock" value="50" min="0" required oninput="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"></div>
                     <div><label class="block text-xs font-semibold text-slate-600 mb-1">Batas Peringatan Stok</label><input type="number" id="prod-min-stock" value="5" min="0" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"></div>
                 </div>
-                <div class="pt-3 flex justify-end gap-2">
+
+                <div class="rounded-xl border-2 border-gold-500/60 bg-amber-50/40 p-3 space-y-3">
+                    <p class="text-xs font-extrabold text-navy-900"><i class="fa-solid fa-tags"></i> Harga Beli / Modal (HPP)</p>
+                    <p class="text-[11px] text-slate-500 -mt-2">Contoh: kertas 1 rim dibeli Rp 60.000, isi 500 lembar, maka modal per lembar otomatis Rp 120.</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">Harga Beli per Kemasan (Rp)</label><input type="number" id="prod-buy-price" min="0" step="any" oninput="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"></div>
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">Nama Kemasan</label><input type="text" id="prod-buy-unit" placeholder="rim / dus / pak" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">Isi per Kemasan (<span id="prod-unit-hint">satuan</span>)</label><input type="number" id="prod-buy-qty" value="1" min="1" step="any" oninput="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"></div>
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">Biaya Tambahan / Satuan (tinta, listrik)</label><input type="number" id="prod-extra-cost" value="0" min="0" step="any" oninput="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">Bahan yang Terpakai (opsional)</label><select id="prod-material" onchange="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"></select></div>
+                        <div><label class="block text-xs font-semibold text-slate-600 mb-1">Bahan per 1 Satuan Jual</label><input type="number" id="prod-material-qty" value="1" min="0" step="any" oninput="updateProductPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"></div>
+                    </div>
+                    <p class="text-[11px] text-slate-500">Untuk layanan print/fotocopy: pilih kertasnya di "Bahan yang Terpakai". Stok kertas otomatis berkurang dan modal kertas ikut masuk HPP.</p>
+                    <div id="prod-preview" class="text-xs rounded-lg bg-white border border-slate-200 p-2.5 space-y-0.5"></div>
+                </div>
+                <label id="prod-log-wrap" class="hidden flex items-start gap-2 text-xs text-slate-700"><input type="checkbox" id="prod-log-purchase" checked class="mt-0.5"> <span id="prod-log-text"></span></label>
+
+                <div class="pt-2 flex justify-end gap-2">
                     <button type="button" onclick="closeProductModal()" class="px-4 py-2 border rounded-xl text-xs">Batal</button>
                     <button type="submit" class="px-4 py-2 bg-navy-900 text-white rounded-xl text-xs font-bold">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL BELI / TAMBAH STOK -->
+    <div id="restock-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-cart-plus text-emerald-700"></i> Beli / Tambah Stok</h3>
+            <form id="restock-form" onsubmit="handleRestockSubmit(event)" class="space-y-3">
+                <input type="hidden" id="rs-id">
+                <p id="rs-name" class="font-extrabold text-navy-900"></p>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label id="rs-qty-label" class="block text-xs font-semibold text-slate-600 mb-1">Jumlah dibeli</label><input type="number" id="rs-qty" min="0" step="any" required oninput="updateRestockPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold"></div>
+                    <div><label id="rs-price-label" class="block text-xs font-semibold text-slate-600 mb-1">Harga beli (Rp)</label><input type="number" id="rs-price" min="0" step="any" required oninput="updateRestockPreview()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold"></div>
+                </div>
+                <div id="rs-preview" class="text-xs rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1"></div>
+                <label class="flex items-start gap-2 text-xs text-slate-700"><input type="checkbox" id="rs-log" checked class="mt-0.5"> <span>Catat sebagai pengeluaran di menu <b>Modal</b></span></label>
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="closeRestockModal()" class="px-4 py-2 border rounded-xl text-xs">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">Simpan Pembelian</button>
                 </div>
             </form>
         </div>
