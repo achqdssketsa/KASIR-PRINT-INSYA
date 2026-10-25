@@ -6,10 +6,10 @@
    Isi dari Firebase Console > Project settings > Your apps > Web app.
    Selama masih "ISI_...", layar login menampilkan petunjuk pengaturan. */
 const FIREBASE_CONFIG = {
-    apiKey: 'ISI_API_KEY',
-    authDomain: 'ISI_PROJECT_ID.firebaseapp.com',
-    projectId: 'ISI_PROJECT_ID',
-    appId: 'ISI_APP_ID'
+    apiKey: 'AIzaSyBu4cyQ_hE3z6ZdMTqaQj4GAHrft0AIGSY',
+    authDomain: 'kasir-81f9e.firebaseapp.com',
+    projectId: 'kasir-81f9e',
+    appId: '1:36507233313:web:68328fb86a2f13434d8760'
 };
 // Daftar email yang boleh masuk. Kosongkan [] jika semua akun Google yang login boleh mengakses.
 // Contoh: ['pemilik@gmail.com', 'kasir1@gmail.com']
