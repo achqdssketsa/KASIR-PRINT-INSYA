@@ -1,0 +1,101 @@
+/* Tema PRINT INSYA: navy + emas, mengikuti desain banner */
+:root {
+    --navy-900: #0a1a45;
+    --navy-800: #12285e;
+    --gold-500: #f5b400;
+}
+
+body { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+/* Judul besar ala banner */
+.wordmark {
+    font-family: 'Barlow Condensed', 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    line-height: .95;
+    letter-spacing: .01em;
+    text-transform: uppercase;
+}
+.text-script { font-family: 'Dancing Script', cursive; font-weight: 600; }
+
+/* Dekorasi header (lengkung navy + emas, titik-titik) */
+.hero-deco { position: absolute; inset: 0; overflow: hidden; pointer-events: none; isolation: isolate; }
+.hero-navy, .hero-gold { position: absolute; left: -70px; top: -64px; width: 230px; height: 110px; border-radius: 0 0 100% 0; transform: rotate(-9deg); }
+.hero-navy { background: var(--navy-900); }
+.hero-gold { background: var(--gold-500); left: -70px; top: -72px; width: 250px; z-index: -1; }
+.hero-dots {
+    position: absolute; right: 0; top: 0; width: 260px; height: 100%;
+    background-image: radial-gradient(#f5b40066 1.5px, transparent 1.6px);
+    background-size: 14px 14px;
+    -webkit-mask-image: linear-gradient(to left, #000, transparent);
+    mask-image: linear-gradient(to left, #000, transparent);
+}
+.auth-top { position: fixed; left: 0; top: 0; width: 100%; height: 14rem; background:
+    radial-gradient(120% 100% at 0% 0%, var(--navy-900) 0 38%, transparent 38.2%),
+    radial-gradient(130% 110% at 0% 0%, var(--gold-500) 0 42%, transparent 42.2%); opacity: .95; pointer-events: none; }
+
+/* Menu ikon kiri: melebar saat di-hover, menimpa konten (tidak menggeser layout) */
+.sidebar {
+    position: absolute; top: 0; bottom: 0; left: 0; width: 4.5rem; overflow: hidden;
+    display: flex; flex-direction: column; gap: .25rem; padding: .75rem .5rem;
+    transition: width .3s cubic-bezier(.4,0,.2,1);
+}
+.sidebar:hover { width: 16rem; }
+.nav-btn {
+    display: flex; align-items: center; gap: 1rem; padding: .8rem 0 .8rem .9rem; border-radius: .75rem;
+    font-weight: 700; font-size: .85rem; color: #cbd5e1; white-space: nowrap; transition: background .15s, color .15s; text-align: left;
+}
+.nav-btn i { width: 1.5rem; text-align: center; font-size: 1.1rem; flex-shrink: 0; }
+.nav-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+.nav-btn.nav-active { background: var(--gold-500); color: var(--navy-900); }
+.sidebar-text { opacity: 0; white-space: nowrap; transition: opacity .2s ease-in-out; pointer-events: none; }
+.sidebar:hover .sidebar-text { opacity: 1; pointer-events: auto; }
+.sidebar-foot { margin-top: auto; padding: .5rem .9rem; }
+
+/* Tombol mode & metode bayar */
+.mode-btn {
+    flex: 1; padding: .6rem .5rem; border-radius: .75rem; font-weight: 700; font-size: .72rem;
+    display: flex; align-items: center; justify-content: center; gap: .4rem; transition: all .15s;
+    background: #fff; color: #475569; border: 1px solid #e2e8f0;
+}
+.mode-btn:hover { background: #f1f5f9; }
+.mode-btn.mode-active { background: var(--navy-900); color: #fff; border-color: var(--navy-900); box-shadow: 0 2px 6px rgba(10,26,69,.3); }
+.pay-btn {
+    padding: .6rem .75rem; border-radius: .75rem; font-weight: 800; font-size: .8rem;
+    display: flex; align-items: center; justify-content: center; gap: .5rem; transition: all .15s;
+    background: #fff; color: #334155; border: 2px solid #e2e8f0;
+}
+.pay-btn.pay-active { background: var(--navy-900); color: #fff; border-color: var(--navy-900); }
+
+/* Kartu umum */
+.card-head {
+    background: #fff; padding: 1rem 1.25rem; border-radius: 1rem; border: 1px solid #e2e8f0; border-left: 6px solid var(--gold-500);
+    box-shadow: 0 1px 2px rgba(0,0,0,.05); display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
+}
+.stat-card { background: #fff; padding: 1.25rem; border-radius: 1rem; border: 1px solid #e2e8f0; border-top: 4px solid var(--navy-900); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.stat-label { font-size: .7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+.btn-wa {
+    padding: .65rem 1rem; background: #059669; color: #fff; font-weight: 700; border-radius: .75rem; font-size: .75rem;
+    display: flex; align-items: center; gap: .5rem; box-shadow: 0 2px 6px rgba(0,0,0,.15); transition: background .15s;
+}
+.btn-wa:hover { background: #047857; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* ===== Struk (cetak) ===== */
+#print-area { display: none; }
+.receipt { width: 72mm; margin: 0 auto; font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.35; color: #000; }
+.receipt .r-center { text-align: center; }
+.receipt .r-bold { font-weight: 700; }
+.receipt .r-title { font-size: 15px; }
+.receipt .r-row { display: flex; justify-content: space-between; gap: 8px; }
+.receipt .r-item { word-break: break-word; }
+.receipt .r-line { border-top: 1px dashed #000; margin: 5px 0; }
+
+@media print {
+    @page { margin: 4mm; }
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block !important; }
+    body { display: block !important; height: auto !important; overflow: visible !important; background: #fff !important; }
+}
