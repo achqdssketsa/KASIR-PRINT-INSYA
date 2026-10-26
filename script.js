@@ -352,7 +352,8 @@ async function initApp() {
     renderStorageInfo();
 
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { closeProductModal(); closeCapitalModal(); closeDeleteTrxModal(); closeRestockModal(); closeQrisBill(); }
+        if (e.key === 'Escape') { closeProductModal(); closeCapitalModal(); closeDeleteTrxModal(); closeRestockModal(); closeQrisBill(); skipReceipt(true); }
+        if ((e.key === 'p' || e.key === 'P') && !document.getElementById('receipt-modal').classList.contains('hidden')) { e.preventDefault(); printPendingReceipt(); }
     });
     ['product-modal', 'capital-modal', 'delete-trx-modal', 'restock-modal'].forEach(id => {
         document.getElementById(id).addEventListener('click', e => {
@@ -385,7 +386,7 @@ function switchTab(tabId) {
     if (tabId === 'riwayat') { historyLimit = 100; renderHistory(); }
     if (tabId === 'produk') renderProductsTable();
     if (tabId === 'modal') renderCapital();
-    if (tabId === 'pengaturan') { renderQrisManager(); renderWaSaved(); updateNotifPermStatus(); renderStorageInfo(); }
+    if (tabId === 'pengaturan') { fillReceiptMode(); renderQrisManager(); renderWaSaved(); updateNotifPermStatus(); renderStorageInfo(); }
 }
 function switchPosMode(mode) {
     const isPrint = mode === 'print';
@@ -566,7 +567,7 @@ function updateCheckoutButton() {
     const label = document.getElementById('checkout-label');
     if (!label) return;
     const { total } = getTotals();
-    label.innerHTML = paymentMethod === 'qris' ? `TAGIH QRIS · ${rupiah(total)}` : 'PROSES &amp; CETAK STRUK';
+    label.innerHTML = paymentMethod === 'qris' ? `TAGIH QRIS · ${rupiah(total)}` : 'PROSES TRANSAKSI';
 }
 
 function onCheckoutClick() {
@@ -967,7 +968,7 @@ function processCheckout() {
         notify(msg, { type: a.status === 'out' ? 'danger' : 'warn', title: 'Peringatan Stok', duration: 9000 });
         browserNotify('Peringatan Stok PRINT INSYA', msg);
     });
-    printReceipt(trx);
+    afterCheckoutReceipt(trx);
 }
 function buildReceipt(t) {
     const rows = t.items.map(i => `
@@ -1793,4 +1794,48 @@ async function importBackup(e) {
     updateStockBadge();
     renderStorageInfo();
     notify('Data berhasil dipulihkan dari cadangan.', { type: 'success', duration: 6000 });
+}
+
+
+/* =========================================================
+   STRUK SETELAH TRANSAKSI: Enter = Lewati, P = Cetak
+   ========================================================= */
+let receiptMode = localStorage.getItem('insya_receipt_mode') || 'ask';   // ask | auto | never
+let pendingReceipt = null;
+let receiptOpenedAt = 0;
+
+function afterCheckoutReceipt(trx) {
+    if (receiptMode === 'auto') return printReceipt(trx);
+    if (receiptMode === 'never') return;
+    pendingReceipt = trx;
+    document.getElementById('rc-info').innerHTML = `
+        <p class="text-xs text-slate-500">${esc(trx.id)}</p>
+        <p class="wordmark normal-case text-5xl text-navy-900 mt-1">${rupiah(trx.total)}</p>
+        ${trx.method === 'cash' ? `<p class="text-sm font-semibold text-slate-600 mt-1">Kembalian: <b class="text-navy-900">${rupiah(trx.change)}</b></p>` : '<p class="text-sm font-semibold text-slate-600 mt-1">Dibayar via QRIS</p>'}`;
+    receiptOpenedAt = Date.now();
+    document.getElementById('receipt-modal').classList.remove('hidden');
+    setTimeout(() => { const b = document.getElementById('receipt-skip'); if (b) b.focus(); }, 80);
+}
+function skipReceipt(fromEsc) {
+    const m = document.getElementById('receipt-modal');
+    if (!m || m.classList.contains('hidden')) return;
+    if (!fromEsc && Date.now() - receiptOpenedAt < 300) return;   // cegah Enter yang sama ikut menutup
+    pendingReceipt = null;
+    m.classList.add('hidden');
+}
+function printPendingReceipt() {
+    if (Date.now() - receiptOpenedAt < 300) return;
+    const t = pendingReceipt;
+    pendingReceipt = null;
+    document.getElementById('receipt-modal').classList.add('hidden');
+    if (t) printReceipt(t);
+}
+function setReceiptMode(v) {
+    receiptMode = v;
+    localStorage.setItem('insya_receipt_mode', v);
+    toast('Pengaturan struk disimpan');
+}
+function fillReceiptMode() {
+    const el = document.getElementById('receipt-mode');
+    if (el) el.value = receiptMode;
 }
