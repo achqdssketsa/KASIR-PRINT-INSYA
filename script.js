@@ -12,7 +12,7 @@ const FIREBASE_CONFIG = {
     appId: '1:36507233313:web:68328fb86a2f13434d8760'
 };
 // Daftar email yang boleh masuk. Kosongkan [] jika semua akun Google yang login boleh mengakses.
-// Contoh: ['pemilik@gmail.com', 'kasir1@gmail.com']
+// Contoh: ['achqds@gmail.com', 'ibnjury@gmail.com']
 const ALLOWED_EMAILS = [];
 
 const DEFAULT_PRODUCTS = [
@@ -326,6 +326,7 @@ function startApp(user) {
     if (user.photo) { photo.src = user.photo; photo.classList.remove('hidden'); }
     if (!appStarted) {
         appStarted = true;
+        initCloudDatabase();
         initApp().catch(e => { console.error(e); notify('Gagal memuat data: ' + e.message, { type: 'danger', duration: 0 }); });
     }
 }
@@ -1702,100 +1703,57 @@ function handleRestockSubmit(e) {
 }
 
 /* =========================================================
-   PENYIMPANAN, CADANGAN & PEMULIHAN
+   PENYIMPANAN CLOUD REAL-TIME (FIRESTORE)
    ========================================================= */
-function fmtBytes(n) {
-    if (!n) return '0 KB';
-    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-    return n.toFixed(i > 1 ? 1 : 0) + ' ' + u[i];
-}
-async function renderStorageInfo() {
-    const el = document.getElementById('storage-info');
-    if (!el) return;
-    let usage = '';
-    try {
-        if (navigator.storage && navigator.storage.estimate) {
-            const e = await navigator.storage.estimate();
-            usage = `${fmtBytes(e.usage)} terpakai dari kuota sekitar ${fmtBytes(e.quota)}`;
-        }
-    } catch (e) { /* abaikan */ }
-    let persisted = null;
-    try { if (navigator.storage && navigator.storage.persisted) persisted = await navigator.storage.persisted(); } catch (e) { /* abaikan */ }
-    const lb = localStorage.getItem('insya_last_backup');
-    const line = (icon, txt) => `<p><i class="fa-solid ${icon} w-5 text-slate-400"></i>${txt}</p>`;
-    el.innerHTML = [
-        line('fa-database', `Mesin penyimpanan: <b>${storageMode === 'idb' ? 'IndexedDB (kapasitas besar)' : 'localStorage (terbatas ±5 MB)'}</b>`),
-        usage ? line('fa-hard-drive', usage) : '',
-        line('fa-receipt', `${transactions.length.toLocaleString('id-ID')} transaksi · ${products.length} item · ${capital.length} catatan modal`),
-        persisted === null ? '' : line(persisted ? 'fa-lock' : 'fa-lock-open', persisted ? 'Penyimpanan <b class="text-emerald-600">permanen</b> (tidak dihapus otomatis oleh browser)' : 'Penyimpanan <b class="text-amber-600">belum permanen</b>: klik tombol di bawah'),
-        line('fa-clock-rotate-left', lb ? `Cadangan terakhir: <b>${fmtDateTime(lb)}</b>` : 'Cadangan terakhir: <b class="text-rose-600">belum pernah</b>')
-    ].join('');
-}
-async function requestPersist() {
-    if (!(navigator.storage && navigator.storage.persist)) return alert('Browser ini tidak mendukung penyimpanan permanen.');
-    const ok = await navigator.storage.persist();
-    notify(ok ? 'Penyimpanan dijadikan permanen.' : 'Browser belum mengizinkan. Biasanya diizinkan setelah situs dipakai rutin atau dipasang sebagai aplikasi.', { type: ok ? 'success' : 'warn', duration: 6000 });
-    renderStorageInfo();
-}
-function checkBackupReminder() {
-    if (!transactions.length) return;
-    const lb = localStorage.getItem('insya_last_backup');
-    const days = lb ? (Date.now() - new Date(lb).getTime()) / 86400000 : Infinity;
-    if (days >= 7) {
-        notify(lb ? `Sudah ${Math.floor(days)} hari belum mencadangkan data. Buka Pengaturan lalu unduh cadangan.` : 'Data belum pernah dicadangkan. Buka Pengaturan lalu unduh cadangan.', { type: 'warn', title: 'Cadangkan Data', duration: 12000 });
+let db = null;
+
+function initCloudDatabase() {
+    if (typeof firebase !== 'undefined' && firebase.apps.length) {
+        db = firebase.firestore();
+        // Mengaktifkan sinkronisasi real-time data dari cloud
+        listenCloudData('insya_products', DEFAULT_PRODUCTS, data => { products = data; refreshAfterProductChange(); });
+        listenCloudData('insya_transactions', [], data => { transactions = data; if(typeof renderHistory === 'function') renderHistory(); if(typeof renderDailyReport === 'function') renderDailyReport(); });
+        listenCloudData('insya_capital', [], data => { capital = data; if(typeof renderCapital === 'function') renderCapital(); });
     }
 }
-function exportBackup() {
-    const data = { app: 'PRINT INSYA', version: 2, exportedAt: new Date().toISOString(), products, transactions, capital, qrisFiles, activeQrisId, waList };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `cadangan-print-insya-${dateKey(new Date())}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-    localStorage.setItem('insya_last_backup', new Date().toISOString());
-    renderStorageInfo();
-    toast('Cadangan diunduh');
-}
-async function importBackup(e) {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    let d;
-    try { d = JSON.parse(await file.text()); } catch (err) { return alert('File cadangan tidak valid (bukan JSON).'); }
-    if (!d || d.app !== 'PRINT INSYA' || !Array.isArray(d.products) || !Array.isArray(d.transactions)) return alert('File ini bukan cadangan PRINT INSYA.');
-    if (!confirm(`Pulihkan data dari cadangan?\n\n${d.transactions.length} transaksi, ${d.products.length} item.\nSemua data yang ada sekarang akan DIGANTI.`)) return;
-    products = d.products;
-    transactions = d.transactions.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
-    capital = Array.isArray(d.capital) ? d.capital : [];
-    qrisFiles = Array.isArray(d.qrisFiles) ? d.qrisFiles : [];
-    activeQrisId = d.activeQrisId || '';
-    waList = Array.isArray(d.waList) ? d.waList : [];
-    waSelectedId = waList[0] ? waList[0].id : '';
-    normalizeProducts();
-    cart = [];
-    await kvSet('products', products);
-    await kvSet('capital', capital);
-    await kvSet('qris_files', qrisFiles);
-    if (idb) await idbReq('trx', 'readwrite', s => { s.clear(); transactions.forEach(t => s.put(t)); }).catch(storageFail);
-    else await kvSet('transactions', transactions);
-    saveQrisState();
-    saveWaList();
-    initPrintServicesSelect();
-    renderPosCatalog();
-    renderCart();
-    renderQrisCart();
-    renderQrisManager();
-    renderWaSaved();
-    updateStockBadge();
-    renderStorageInfo();
-    notify('Data berhasil dipulihkan dari cadangan.', { type: 'success', duration: 6000 });
+
+function loadJSON(key, fallback) {
+    // Fallback lokal sementara sebelum cloud siap
+    try {
+        const v = JSON.parse(localStorage.getItem(key));
+        return Array.isArray(v) ? v : fallback;
+    } catch (e) { return fallback; }
 }
 
+function saveJSON(key, val) {
+    // Simpan ke localStorage sebagai cadangan offline
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+    
+    // Simpan secara real-time ke Firebase Firestore Cloud agar perangkat lain ikut update
+    if (db) {
+        db.collection('print_insya_store').doc(key).set({ content: JSON.stringify(val) })
+          .catch(err => console.error("Gagal sinkron ke cloud:", err));
+    }
+    return true;
+}
+
+function listenCloudData(key, fallback, callback) {
+    if (!db) return;
+    db.collection('print_insya_store').doc(key).onSnapshot(doc => {
+        if (doc.exists) {
+            try {
+                const parsed = JSON.parse(doc.data().content);
+                if (Array.isArray(parsed)) callback(parsed);
+            } catch (e) {}
+        } else {
+            // Jika data cloud belum ada, inisialisasi dengan data default
+            saveJSON(key, fallback);
+        }
+    });
+}
+
+function saveProducts() { return saveJSON('insya_products', products); 
+}
 
 /* =========================================================
    STRUK SETELAH TRANSAKSI: Enter = Lewati, P = Cetak
