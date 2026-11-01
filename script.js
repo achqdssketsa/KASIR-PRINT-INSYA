@@ -12,8 +12,8 @@ const FIREBASE_CONFIG = {
     appId: '1:36507233313:web:68328fb86a2f13434d8760'
 };
 // Daftar email yang boleh masuk. Kosongkan [] jika semua akun Google yang login boleh mengakses.
-// Contoh: ['achqds@gmail.com', 'ibnjury@gmail.com']
-const ALLOWED_EMAILS = [];
+// Contoh: ['achqds@gmail.com', 'ibnjury@gmail.com', 'abdrozaq407@gmail.com']
+const ALLOWED_EMAILS = ['achqds@gmail.com', 'ibnjury@gmail.com', 'abdrozaq407@gmail.com'];
 
 const DEFAULT_PRODUCTS = [
     { id: 'p1', name: 'Print Biasa (B&W)', category: 'Layanan Print & Fotocopy', price: 500, unit: 'lembar', stock: 1000, minStock: 50 },
