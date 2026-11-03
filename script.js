@@ -1812,6 +1812,14 @@ function exportBackup() {
     renderStorageInfo();
     toast('Cadangan diunduh');
 }
+function checkBackupReminder() {
+    if (!transactions.length) return;
+    const lb = localStorage.getItem('insya_last_backup');
+    const days = lb ? (Date.now() - new Date(lb).getTime()) / 86400000 : Infinity;
+    if (days >= 7) {
+        notify(lb ? `Sudah ${Math.floor(days)} hari belum mencadangkan data. Buka Pengaturan lalu unduh cadangan.` : 'Data belum pernah dicadangkan. Buka Pengaturan lalu unduh cadangan.', { type: 'warn', title: 'Cadangkan Data', duration: 12000 });
+    }
+}
 
 /* =========================================================
    STRUK SETELAH TRANSAKSI: Enter = Lewati, P = Cetak
