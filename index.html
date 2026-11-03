@@ -29,7 +29,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 </head>
@@ -457,6 +456,17 @@
                     </div>
 
                     <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-extrabold text-navy-900 text-base flex items-center gap-2"><i class="fa-solid fa-cloud text-navy-800"></i> Sinkron Cloud (Firestore)</h3>
+                        <div id="cloud-info" class="text-xs space-y-1.5 text-slate-600"></div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="cloudSelfTest()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold"><i class="fa-solid fa-stethoscope"></i> Tes Koneksi Cloud</button>
+                            <button onclick="cloudUploadAll()" class="px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold"><i class="fa-solid fa-cloud-arrow-up"></i> Kirim Semua Data ke Cloud</button>
+                            <button onclick="cloudDownloadAll()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold"><i class="fa-solid fa-cloud-arrow-down"></i> Ambil Data dari Cloud</button>
+                        </div>
+                        <p class="text-[11px] text-slate-500">Setiap transaksi, perubahan barang, dan catatan modal otomatis dikirim ke Firestore. Setelah <b>Pulihkan dari File</b>, data juga otomatis dikirim ke cloud. Gambar QRIS tetap disimpan di perangkat saja. Bila status merah, baca pesannya lalu klik <b>Tes Koneksi Cloud</b>.</p>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                         <h3 class="font-extrabold text-navy-900 text-base flex items-center gap-2"><i class="fa-solid fa-database text-navy-800"></i> Penyimpanan &amp; Cadangan Data</h3>
                         <div id="storage-info" class="text-xs space-y-1.5 text-slate-600"></div>
                         <div class="flex flex-wrap gap-2">
@@ -466,7 +476,7 @@
                             </label>
                             <button onclick="requestPersist()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold"><i class="fa-solid fa-lock"></i> Jadikan Penyimpanan Permanen</button>
                         </div>
-                        <p class="text-[11px] text-slate-500">Data tersimpan di browser perangkat ini. Unduh cadangan secara rutin (mis. tiap minggu) dan simpan di Google Drive/flashdisk, agar aman bila browser dibersihkan atau perangkat rusak.</p>
+                        <p class="text-[11px] text-slate-500">Data utama tersimpan di browser perangkat ini dan dicerminkan ke cloud bila login Google aktif. Tetap unduh cadangan secara rutin (mis. tiap minggu) dan simpan di Google Drive/flashdisk, agar aman bila browser dibersihkan atau perangkat rusak.</p>
                     </div>
                 </div>
             </div>

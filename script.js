@@ -15,8 +15,8 @@ const FIREBASE_CONFIG = {
 // Contoh: ['achqds@gmail.com', 'ibnjury@gmail.com', 'abdrozaq407@gmail.com']
 const ALLOWED_EMAILS = ['achqds@gmail.com', 'ibnjury@gmail.com', 'abdrozaq407@gmail.com'];
 
-// Sinkron Firestore sengaja DIMATIKAN: versi lama menimpa data lokal dengan data cloud kosong. Jangan diaktifkan sebelum dirancang ulang.
-const CLOUD_SYNC = false;
+// Sinkron Firestore AKTIF. Desain baru: lokal tetap utama, tidak pernah menimpa data lokal dengan cloud kosong.
+const CLOUD_SYNC = true;
 let db = null;
 
 const DEFAULT_PRODUCTS = [
@@ -89,7 +89,7 @@ function saveJSON(key, val) {
     try { localStorage.setItem(key, JSON.stringify(val)); return true; }
     catch (e) { alert('Gagal menyimpan data (penyimpanan browser penuh atau diblokir).'); return false; }
 }
-function saveProducts() { return kvSet('products', products); }
+function saveProducts() { if (typeof stampChanged === 'function') stampChanged('products', products); const r = kvSet('products', products); cloudPushProducts(); return r; }
 
 /* ---------- Penyimpanan: IndexedDB (kapasitas besar), cadangan ke localStorage bila tidak tersedia ---------- */
 let idb = null;
@@ -135,14 +135,16 @@ async function kvGet(key) {
     if (idb) return idbReq('kv', 'readonly', s => s.get(key));
     try { return JSON.parse(localStorage.getItem('insya_' + key)); } catch (e) { return undefined; }
 }
-function saveTrx(t) {
+function localSaveTrx(t) {
     if (idb) return idbReq('trx', 'readwrite', s => s.put(t)).catch(storageFail);
     return kvSet('transactions', transactions);
 }
-function removeTrx(id) {
+function localRemoveTrx(id) {
     if (idb) return idbReq('trx', 'readwrite', s => s.delete(id)).catch(storageFail);
     return kvSet('transactions', transactions);
 }
+function saveTrx(t) { const r = localSaveTrx(t); cloudPushTrx(t); return r; }
+function removeTrx(id) { const r = localRemoveTrx(id); cloudDeleteTrx(id); return r; }
 function legacyGet(key) {
     try { const v = JSON.parse(localStorage.getItem('insya_' + key)); return Array.isArray(v) ? v : undefined; } catch (e) { return undefined; }
 }
@@ -330,8 +332,8 @@ function startApp(user) {
     if (user.photo) { photo.src = user.photo; photo.classList.remove('hidden'); }
     if (!appStarted) {
         appStarted = true;
-        initCloudDatabase();
-        initApp().catch(e => { console.error(e); notify('Gagal memuat data: ' + e.message, { type: 'danger', duration: 0 }); });
+        initApp().then(() => initCloudDatabase())
+            .catch(e => { console.error(e); notify('Gagal memuat data: ' + e.message, { type: 'danger', duration: 0 }); });
     }
 }
 
@@ -391,7 +393,7 @@ function switchTab(tabId) {
     if (tabId === 'riwayat') { historyLimit = 100; renderHistory(); }
     if (tabId === 'produk') renderProductsTable();
     if (tabId === 'modal') renderCapital();
-    if (tabId === 'pengaturan') { fillReceiptMode(); renderQrisManager(); renderWaSaved(); updateNotifPermStatus(); renderStorageInfo(); }
+    if (tabId === 'pengaturan') { fillReceiptMode(); renderQrisManager(); renderWaSaved(); updateNotifPermStatus(); renderStorageInfo(); renderCloudStatus(); }
 }
 function switchPosMode(mode) {
     const isPrint = mode === 'print';
@@ -1145,7 +1147,7 @@ function formatWa(num) {
     if (!num) return '';
     return '+' + num.replace(/^(\d{2})(\d{3,4})(\d{3,4})(\d*)$/, (m, a, b, c, d) => [a, b, c, d].filter(Boolean).join(' '));
 }
-function saveWaList() { saveJSON('insya_wa_list', waList); localStorage.setItem('insya_wa_selected', waSelectedId || ''); }
+function saveWaList() { saveJSON('insya_wa_list', waList); localStorage.setItem('insya_wa_selected', waSelectedId || ''); cloudPushWa(); }
 function getSelectedWaNumber() {
     const w = waList.find(x => x.id === waSelectedId) || waList[0];
     return w ? w.number : '';
@@ -1330,6 +1332,7 @@ function deleteProduct(id) {
     const p = products.find(x => x.id === id);
     if (!p || !confirm(`Hapus "${p.name}" dari katalog?`)) return;
     products = products.filter(x => x.id !== id);
+    cloudDeleteDoc('products', id);
     refreshAfterProductChange();
 }
 
@@ -1450,7 +1453,7 @@ function handleProductSubmit(e) {
 /* =========================================================
    MODAL USAHA
    ========================================================= */
-function saveCapital() { return kvSet('capital', capital); }
+function saveCapital() { if (typeof stampChanged === 'function') stampChanged('capital', capital); const r = kvSet('capital', capital); cloudPushCapital(); return r; }
 
 function renderCapital() {
     const masuk = capital.filter(c => c.type === 'masuk');
@@ -1543,6 +1546,7 @@ function deleteCapital(id) {
     const extra = c.auto ? '\n\nCatatan ini dibuat otomatis dari pembelian stok. Menghapusnya TIDAK mengurangi stok barang.' : '';
     if (!confirm(`Hapus catatan "${c.category}" sebesar ${rupiah(c.amount)}?${extra}`)) return;
     capital = capital.filter(x => x.id !== id);
+    cloudDeleteDoc('capital', id);
     saveCapital();
     renderCapital();
 }
@@ -1707,53 +1711,281 @@ function handleRestockSubmit(e) {
 }
 
 /* =========================================================
-   PENYIMPANAN CLOUD REAL-TIME (FIRESTORE)
+   SINKRON CLOUD (FIRESTORE)
+   ---------------------------------------------------------
+   Prinsip: data di perangkat (IndexedDB) tetap sumber utama.
+   Cloud adalah cermin + penghubung antar perangkat.
+   Struktur:  print_insya/main/{products|transactions|capital|settings}/{id}
+   - 1 dokumen per item (batas Firestore 1 MB/dokumen tidak terlewati)
+   - Tidak pernah menimpa data lokal dengan cloud kosong
+   - Konflik produk/modal: yang _updatedAt-nya lebih baru menang
    ========================================================= */
+const CLOUD_TRX_WINDOW_DAYS = 45;   // transaksi yang dipantau real-time (hemat kuota baca)
+const cloudCache = { products: new Map(), transactions: new Map(), capital: new Map() };
+const cloudUnsubs = [];
+let cloudQueue = Promise.resolve();
+let cloudErrShown = false;
+const cloudState = { status: 'off', msg: 'Belum tersambung', last: null };
 
+function cloudCol(name) { return db.collection('print_insya').doc('main').collection(name); }
+function cid(id) { return String(id).replace(/\//g, '_'); }
+function clean(o) { return JSON.parse(JSON.stringify(o)); }          // buang undefined (Firestore menolaknya)
+function stable(v) {                                                  // JSON urut-kunci, abaikan field "_..."
+    if (Array.isArray(v)) return '[' + v.map(stable).join(',') + ']';
+    if (v && typeof v === 'object') {
+        return '{' + Object.keys(v).filter(k => k[0] !== '_' && v[k] !== undefined).sort()
+            .map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}';
+    }
+    return JSON.stringify(v);
+}
+
+function cloudSetStatus(status, msg) {
+    cloudState.status = status;
+    cloudState.msg = msg;
+    if (status === 'ok') cloudState.last = new Date().toISOString();
+    renderCloudStatus();
+}
+function cloudError(e, where) {
+    console.error('[Cloud]', where || '', e);
+    let msg = (e && e.message) || String(e);
+    if (e && e.code === 'permission-denied') msg = 'DITOLAK oleh Firestore Rules (permission-denied). Perbarui Rules di Firebase Console.';
+    else if (e && e.code === 'unavailable') msg = 'Tidak ada koneksi internet / server Firestore tidak terjangkau. Data aman di perangkat dan akan dikirim ulang saat aplikasi dibuka lagi.';
+    else if (e && (e.code === 'failed-precondition' || e.code === 'not-found')) msg = 'Database Firestore belum dibuat di proyek ini (Firebase Console > Firestore Database > Create database).';
+    cloudSetStatus('error', msg + (e && e.code ? ` [${e.code}]` : ''));
+    if (!cloudErrShown) {
+        cloudErrShown = true;
+        notify(msg, { type: 'danger', title: 'Sinkron Cloud Gagal', duration: 0 });
+    }
+}
+function cloudEnqueue(fn, where) {
+    cloudQueue = cloudQueue.then(fn).catch(e => cloudError(e, where));
+    return cloudQueue;
+}
+
+/* ---------- Mulai ---------- */
 function initCloudDatabase() {
-    if (!CLOUD_SYNC) return;
-    if (typeof firebase !== 'undefined' && firebase.apps.length) {
-        db = firebase.firestore();
-        // Mengaktifkan sinkronisasi real-time data dari cloud
-        listenCloudData('insya_products', DEFAULT_PRODUCTS, data => { products = data; refreshAfterProductChange(); });
-        listenCloudData('insya_transactions', [], data => { transactions = data; if(typeof renderHistory === 'function') renderHistory(); if(typeof renderDailyReport === 'function') renderDailyReport(); });
-        listenCloudData('insya_capital', [], data => { capital = data; if(typeof renderCapital === 'function') renderCapital(); });
-    }
+    if (!CLOUD_SYNC) { cloudSetStatus('off', 'Sinkron cloud dimatikan (CLOUD_SYNC = false)'); return; }
+    if (!auth || !auth.currentUser) { cloudSetStatus('off', 'Mode uji coba / belum login: data hanya tersimpan di perangkat ini'); return; }
+    if (typeof firebase === 'undefined' || !firebase.firestore) { cloudSetStatus('error', 'Library Firestore belum termuat di index.html'); return; }
+    if (db) return;
+    db = firebase.firestore();
+    cloudSetStatus('connecting', 'Menyambungkan ke Firestore...');
+
+    const winStart = new Date(Date.now() - CLOUD_TRX_WINDOW_DAYS * 86400000).toISOString();
+    listenCloud('products', cloudCol('products'), () => products, applyRemoteProduct, removeRemoteProduct, afterRemoteProducts);
+    listenCloud('transactions', cloudCol('transactions').where('timestamp', '>=', winStart), () => transactions.filter(t => String(t.timestamp) >= winStart), applyRemoteTrx, removeRemoteTrx, afterRemoteTrx);
+    listenCloud('capital', cloudCol('capital'), () => capital, applyRemoteCapital, removeRemoteCapital, afterRemoteCapital);
+    cloudCol('settings').doc('wa_list').onSnapshot(doc => {
+        if (!doc.exists || doc.metadata.hasPendingWrites) return;
+        try {
+            const arr = JSON.parse(doc.data().content);
+            if (Array.isArray(arr) && stable(arr) !== stable(waList)) {
+                waList = arr; saveJSON('insya_wa_list', waList);
+                if (typeof renderWaSaved === 'function') renderWaSaved();
+            }
+        } catch (e) { /* abaikan */ }
+    }, e => cloudError(e, 'wa_list'));
 }
 
-function loadJSON(key, fallback) {
-    // Fallback lokal sementara sebelum cloud siap
-    try {
-        const v = JSON.parse(localStorage.getItem(key));
-        return Array.isArray(v) ? v : fallback;
-    } catch (e) { return fallback; }
+function listenCloud(name, query, getLocal, upsert, remove, after) {
+    let first = true;
+    const unsub = query.onSnapshot(snap => {
+        let changed = false;
+        snap.docChanges().forEach(ch => {
+            const id = ch.doc.id;
+            if (ch.type === 'removed') {
+                cloudCache[name].delete(id);
+                if (!ch.doc.metadata.hasPendingWrites && remove(id)) changed = true;
+                return;
+            }
+            const data = ch.doc.data();
+            cloudCache[name].set(id, stable(data));
+            if (ch.doc.metadata.hasPendingWrites) return;      // gema dari tulisan kita sendiri
+            if (upsert(data)) changed = true;
+        });
+        if (changed) after();
+        if (first) {                                           // pertama kali: kirim data lokal yang belum ada / lebih baru
+            first = false;
+            cloudEnqueue(() => cloudPush(name, getLocal(), {}), 'push-awal ' + name);
+        }
+        if (!snap.metadata.fromCache) cloudSetStatus('ok', 'Tersambung & tersinkron');
+    }, e => cloudError(e, 'listen ' + name));
+    cloudUnsubs.push(unsub);
 }
 
-function saveJSON(key, val) {
-    // Simpan ke localStorage sebagai cadangan offline
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
-    
-    // Simpan secara real-time ke Firebase Firestore Cloud agar perangkat lain ikut update
-    if (db) {
-        db.collection('print_insya_store').doc(key).set({ content: JSON.stringify(val) })
-          .catch(err => console.error("Gagal sinkron ke cloud:", err));
+/* ---------- Kirim ke cloud ---------- */
+// opts.prune = hapus dokumen cloud yang tidak ada di list; opts.force = tulis ulang semua
+async function cloudPush(name, list, opts = {}) {
+    if (!db) return;
+    const col = cloudCol(name);
+    const ops = [], keep = new Set();
+    list.forEach(o => {
+        if (!o || o.id === undefined) return;
+        const id = cid(o.id); keep.add(id);
+        const data = clean(o);
+        const j = stable(data);
+        if (opts.force || cloudCache[name].get(id) !== j) ops.push({ t: 'set', id, data, j });
+    });
+    if (opts.prune) cloudCache[name].forEach((_, id) => { if (!keep.has(id)) ops.push({ t: 'del', id }); });
+    for (let i = 0; i < ops.length; i += 400) {
+        const chunk = ops.slice(i, i + 400);
+        const b = db.batch();
+        chunk.forEach(op => op.t === 'set' ? b.set(col.doc(op.id), op.data) : b.delete(col.doc(op.id)));
+        await b.commit();
+        chunk.forEach(op => op.t === 'set' ? cloudCache[name].set(op.id, op.j) : cloudCache[name].delete(op.id));
     }
+    if (ops.length) cloudSetStatus('ok', `Tersinkron (${ops.length} perubahan terkirim)`);
+}
+// beri cap waktu pada item yang berubah supaya "yang terbaru menang"
+function stampChanged(name, list) {
+    if (!db) return;
+    list.forEach(o => {
+        const j = cloudCache[name].get(cid(o.id));
+        if (j === undefined || j !== stable(clean(o))) o._updatedAt = Date.now();
+    });
+}
+function cloudPushProducts() { if (db) cloudEnqueue(() => cloudPush('products', products), 'simpan produk'); }
+function cloudPushCapital() { if (db) cloudEnqueue(() => cloudPush('capital', capital), 'simpan modal'); }
+function cloudPushTrx(t) { if (db) cloudEnqueue(() => cloudPush('transactions', [t]), 'simpan transaksi'); }
+function cloudDeleteDoc(name, id) {
+    if (!db) return;
+    cloudEnqueue(async () => { await cloudCol(name).doc(cid(id)).delete(); cloudCache[name].delete(cid(id)); }, 'hapus ' + name);
+}
+function cloudDeleteTrx(id) { cloudDeleteDoc('transactions', id); }
+function cloudPushWa() {
+    if (!db) return;
+    cloudEnqueue(() => cloudCol('settings').doc('wa_list').set({ content: JSON.stringify(waList) }), 'simpan nomor WA');
+}
+
+/* ---------- Terima dari cloud (hanya ke penyimpanan lokal, TIDAK dikirim balik) ---------- */
+function applyRemoteProduct(d) {
+    const i = products.findIndex(p => p.id === d.id);
+    if (i < 0) { products.push(d); return true; }
+    if (stable(products[i]) === stable(d)) { products[i]._updatedAt = d._updatedAt; return false; }
+    if ((d._updatedAt || 0) > (products[i]._updatedAt || 0)) { products[i] = d; return true; }
+    return false;
+}
+function removeRemoteProduct(id) {
+    const n = products.length;
+    products = products.filter(p => cid(p.id) !== id);
+    return products.length !== n;
+}
+function afterRemoteProducts() {
+    normalizeProducts();
+    kvSet('products', products);
+    try { syncCartWithProducts(); renderProductsTable(); renderPosCatalog(); initPrintServicesSelect(); renderCart(); updateStockBadge(); } catch (e) { console.error(e); }
+}
+function applyRemoteTrx(d) {
+    if (transactions.some(t => t.id === d.id)) return false;      // transaksi tidak pernah diedit
+    transactions.push(d);
+    localSaveTrx(d);
     return true;
 }
+function removeRemoteTrx(id) {
+    const t = transactions.find(x => cid(x.id) === id);
+    if (!t) return false;
+    transactions = transactions.filter(x => x.id !== t.id);
+    localRemoveTrx(t.id);
+    return true;
+}
+function afterRemoteTrx() {
+    transactions.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+    try { renderHistory(); renderDailyReport(); renderAuditReport(); renderCapital(); } catch (e) { console.error(e); }
+}
+function applyRemoteCapital(d) {
+    const i = capital.findIndex(c => c.id === d.id);
+    if (i < 0) { capital.push(d); return true; }
+    if (stable(capital[i]) === stable(d)) { capital[i]._updatedAt = d._updatedAt; return false; }
+    if ((d._updatedAt || 0) > (capital[i]._updatedAt || 0)) { capital[i] = d; return true; }
+    return false;
+}
+function removeRemoteCapital(id) {
+    const n = capital.length;
+    capital = capital.filter(c => cid(c.id) !== id);
+    return capital.length !== n;
+}
+function afterRemoteCapital() {
+    kvSet('capital', capital);
+    try { renderCapital(); renderDailyReport(); renderAuditReport(); } catch (e) { console.error(e); }
+}
 
-function listenCloudData(key, fallback, callback) {
-    if (!db) return;
-    db.collection('print_insya_store').doc(key).onSnapshot(doc => {
-        if (doc.exists) {
-            try {
-                const parsed = JSON.parse(doc.data().content);
-                if (Array.isArray(parsed)) callback(parsed);
-            } catch (e) {}
-        } else {
-            // Jika data cloud belum ada, inisialisasi dengan data default
-            saveJSON(key, fallback);
-        }
-    });
+/* ---------- Tombol manual di Pengaturan ---------- */
+async function cloudLoadAllIds() {            // isi cache dari seluruh isi cloud (dipakai sinkron penuh)
+    for (const name of ['products', 'transactions', 'capital']) {
+        const snap = await cloudCol(name).get();
+        cloudCache[name].clear();
+        snap.forEach(d => cloudCache[name].set(d.id, stable(d.data())));
+    }
+}
+// Kirim SEMUA data perangkat ini ke cloud (data lokal dianggap paling benar)
+async function cloudUploadAll(opts = {}) {
+    if (!db) { notify('Belum tersambung ke cloud. Login dengan Google dulu (bukan mode uji coba).', { type: 'warn' }); return; }
+    cloudSetStatus('connecting', 'Mengirim semua data ke cloud...');
+    await cloudEnqueue(async () => {
+        await cloudLoadAllIds();
+        const now = Date.now();
+        products.forEach(p => { p._updatedAt = now; });
+        capital.forEach(c => { c._updatedAt = now; });
+        await kvSet('products', products);
+        await kvSet('capital', capital);
+        await cloudPush('products', products, { force: true, prune: !!opts.prune });
+        await cloudPush('capital', capital, { force: true, prune: !!opts.prune });
+        await cloudPush('transactions', transactions, { force: true, prune: !!opts.prune });
+        await cloudCol('settings').doc('wa_list').set({ content: JSON.stringify(waList) });
+        cloudSetStatus('ok', `Selesai: ${products.length} item, ${transactions.length} transaksi, ${capital.length} modal terkirim`);
+    }, 'kirim semua');
+    if (cloudState.status === 'ok') notify(cloudState.msg, { type: 'success', duration: 7000 });
+}
+async function cloudDownloadAll() {
+    if (!db) { notify('Belum tersambung ke cloud.', { type: 'warn' }); return; }
+    if (!confirm('Ambil semua data dari cloud dan GANTI data di perangkat ini?\n\nPastikan cloud sudah berisi data yang benar.')) return;
+    try {
+        cloudSetStatus('connecting', 'Mengunduh data dari cloud...');
+        const [p, t, c] = await Promise.all(['products', 'transactions', 'capital'].map(n => cloudCol(n).get()));
+        if (p.empty && t.empty && c.empty) { cloudSetStatus('ok', 'Cloud masih kosong, data lokal tidak diubah'); return notify('Cloud masih kosong. Data lokal TIDAK diubah.', { type: 'warn' }); }
+        products = p.docs.map(d => d.data());
+        transactions = t.docs.map(d => d.data()).sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+        capital = c.docs.map(d => d.data());
+        normalizeProducts();
+        await kvSet('products', products);
+        await kvSet('capital', capital);
+        if (idb) await idbReq('trx', 'readwrite', s => { s.clear(); transactions.forEach(x => s.put(x)); });
+        else await kvSet('transactions', transactions);
+        await cloudLoadAllIds();
+        afterRemoteProducts(); afterRemoteTrx(); afterRemoteCapital();
+        renderStorageInfo();
+        cloudSetStatus('ok', `Dimuat dari cloud: ${products.length} item, ${transactions.length} transaksi`);
+        notify(cloudState.msg, { type: 'success', duration: 6000 });
+    } catch (e) { cloudError(e, 'ambil dari cloud'); }
+}
+// Tes tulis-baca 1 dokumen supaya penyebab gagal langsung kelihatan
+async function cloudSelfTest() {
+    if (!db) return notify('Belum tersambung ke cloud (cek login Google / CLOUD_SYNC).', { type: 'warn' });
+    try {
+        const ref = cloudCol('settings').doc('selftest');
+        await ref.set({ at: new Date().toISOString(), by: (auth.currentUser && auth.currentUser.email) || '' });
+        const s = await ref.get();
+        if (!s.exists) throw new Error('Tulis berhasil tetapi baca gagal');
+        cloudSetStatus('ok', 'Tes berhasil: aplikasi boleh menulis & membaca Firestore');
+        notify('Tes berhasil. Firestore menerima data dari aplikasi ini.', { type: 'success' });
+    } catch (e) { cloudError(e, 'tes koneksi'); }
+}
+
+function renderCloudStatus() {
+    const el = document.getElementById('cloud-info');
+    if (!el) return;
+    const map = {
+        ok: ['fa-cloud-arrow-up', 'text-emerald-600', 'Tersambung'],
+        connecting: ['fa-spinner fa-spin', 'text-amber-600', 'Menyambungkan'],
+        error: ['fa-triangle-exclamation', 'text-rose-600', 'Bermasalah'],
+        off: ['fa-cloud-slash', 'text-slate-500', 'Tidak aktif']
+    };
+    const m = map[cloudState.status] || map.off;
+    const who = auth && auth.currentUser ? auth.currentUser.email : '-';
+    el.innerHTML = `
+        <p><i class="fa-solid ${m[0]} w-5 ${m[1]}"></i><b class="${m[1]}">${m[2]}</b> — ${esc(cloudState.msg)}</p>
+        <p><i class="fa-solid fa-user w-5 text-slate-400"></i>Akun: <b>${esc(who)}</b></p>
+        <p><i class="fa-solid fa-clock w-5 text-slate-400"></i>Terakhir sukses: <b>${cloudState.last ? fmtDateTime(cloudState.last) : '-'}</b></p>`;
 }
 
 
@@ -1841,6 +2073,8 @@ async function importBackup(e) {
     else await kvSet('transactions', transactions);
     saveQrisState();
     saveWaList();
+    if (db) await cloudUploadAll({ prune: true });   // cloud ikut diganti sesuai file cadangan
+    else notify('Data dipulihkan di perangkat ini, tetapi TIDAK terkirim ke cloud (belum login Google).', { type: 'warn', duration: 9000 });
     initPrintServicesSelect();
     renderPosCatalog();
     renderCart();
