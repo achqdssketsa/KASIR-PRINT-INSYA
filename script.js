@@ -1756,6 +1756,64 @@ function saveProducts() { return saveJSON('insya_products', products);
 }
 
 /* =========================================================
+   PENGELOLAAN PENYIMPANAN & CADANGAN DATA
+   ========================================================= */
+function fmtBytes(n) {
+    if (!n) return '0 KB';
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return n.toFixed(i > 1 ? 1 : 0) + ' ' + u[i];
+}
+
+async function renderStorageInfo() {
+    const el = document.getElementById('storage-info');
+    if (!el) return;
+    let usage = '';
+    try {
+        if (navigator.storage && navigator.storage.estimate) {
+            const e = await navigator.storage.estimate();
+            usage = `${fmtBytes(e.usage)} terpakai dari kuota sekitar ${fmtBytes(e.quota)}`;
+        }
+    } catch (e) { /* abaikan */ }
+    
+    let persisted = null;
+    try { if (navigator.storage && navigator.storage.persisted) persisted = await navigator.storage.persisted(); } catch (e) { /* abaikan */ }
+    
+    const lb = localStorage.getItem('insya_last_backup');
+    const line = (icon, txt) => `<p><i class="fa-solid ${icon} w-5 text-slate-400"></i>${txt}</p>`;
+    
+    el.innerHTML = [
+        line('fa-database', `Sistem Penyimpanan: <b>Cloud Firestore Real-time</b>`),
+        usage ? line('fa-hard-drive', usage) : '',
+        line('fa-receipt', `${(typeof transactions !== 'undefined' ? transactions.length : 0).toLocaleString('id-ID')} transaksi · ${(typeof products !== 'undefined' ? products.length : 0)} item · ${(typeof capital !== 'undefined' ? capital.length : 0)} catatan modal`),
+        persisted === null ? '' : line(persisted ? 'fa-lock' : 'fa-lock-open', persisted ? 'Penyimpanan <b class="text-emerald-600">permanen</b>' : 'Penyimpanan belum permanen'),
+        line('fa-clock-rotate-left', lb ? `Cadangan terakhir: <b>${lb}</b>` : 'Cadangan terakhir: <b class="text-rose-600">belum pernah</b>')
+    ].join('');
+}
+
+async function requestPersist() {
+    if (!(navigator.storage && navigator.storage.persist)) return alert('Browser ini tidak mendukung penyimpanan permanen.');
+    const ok = await navigator.storage.persist();
+    toast(ok ? 'Penyimpanan dijadikan permanen.' : 'Browser belum mengizinkan.', { type: ok ? 'success' : 'warn' });
+    renderStorageInfo();
+}
+
+function exportBackup() {
+    const data = { app: 'PRINT INSYA', version: 2, exportedAt: new Date().toISOString(), products, transactions, capital };
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `cadangan-print-insya-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    localStorage.setItem('insya_last_backup', new Date().toISOString());
+    renderStorageInfo();
+    toast('Cadangan diunduh');
+}
+
+/* =========================================================
    STRUK SETELAH TRANSAKSI: Enter = Lewati, P = Cetak
    ========================================================= */
 let receiptMode = localStorage.getItem('insya_receipt_mode') || 'ask';   // ask | auto | never
